@@ -207,16 +207,50 @@ the order. Every step is idempotent, so a retry just re-runs from the top:
   startup. Malformed JSON returns 400. An unknown order is logged and returns 200 (so Gelato stops retrying).
 - `GET /api/orders/:id` is public (the `/track` link), so it returns no email or address.
 
-## Admin role
+## Admin role and admin API
 
-`Customer.role` is `"customer"` (default) or `"admin"`. `requireAdmin(request, reply)` in `src/auth/guard.ts`
-answers 401 when not logged in and 403 when not an admin. It's for Milestone 4's `/admin` routes, none of
-which exist yet. **No API route can grant the role**; only the CLI can:
+`Customer.role` is `"customer"` (default) or `"admin"`. **No API route can grant the role**; only the CLI can:
 
 ```bash
 npm run make-admin -- someone@example.com            # the customer must already exist
 npm run make-admin -- someone@example.com --revoke
 ```
+
+`GET /api/auth/me` returns `role` so the web app can show `/admin`. That's cosmetic: the API is the boundary.
+
+Every `/api/admin/*` route lives in one encapsulated Fastify plugin (`src/admin/plugin.ts`) whose hooks run
+for all of them, so a new route can't forget one:
+
+1. **Rate limit:** `RL_ADMIN_IP_MAX` (600) requests per IP per `RL_ADMIN_WINDOW_MIN` (10), plus
+   `RL_ADMIN_MUTATION_IP_MAX` (60) for POSTs.
+2. **CSRF:** every non-GET request needs `X-Admin-Request: 1` (403 otherwise). Browsers only send a custom header
+   cross-site after a CORS preflight, and the preflight fails for origins outside `CORS_ORIGIN` (`src/cors.ts`).
+3. **`requireAdmin`:** 401 not logged in, 403 not an admin. The role is read from the DB on every request.
+
+`test/unit/adminGuard.test.ts` enumerates the registered routes and checks all three on each.
+
+Every admin mutation is audited: deletions in `DeletionAuditLog` (`trigger: "admin"`, `actor` = admin's
+customer id, `force` recorded), everything else in `AdminActionLog` (admin id, action, target, before/after).
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/admin/queues` | Each queue's active/waiting/delayed/completed/failed counts (`stage-*` only when `STAGE_EXECUTION=queued`) |
+| GET | `/api/admin/queues/:name/jobs?state=&page=&limit=` | Jobs in one state, paged, with a redacted data summary |
+| GET | `/api/admin/queues/:name/jobs/:id` | Full job detail: data, failedReason, stacktrace, attempts, `gelatoUnknownOutcome`. Emails and R2/signed URLs are redacted |
+| POST | `/api/admin/queues/:name/jobs/:id/retry` | Retries a failed job (fresh attempts). A fulfilment job whose order is `failed` (with no Gelato order) is reset to `paid` first. 409 `gelato_unknown_outcome` until the order is reconciled |
+| GET | `/api/admin/orders?status=&from=&to=&q=&page=&limit=` | Orders, newest first. `q` = exact order id, id prefix, or email substring |
+| GET | `/api/admin/orders/:id` | Items, status timeline (with admin notes, no raw webhook bodies), Gelato ids, fulfilment job state, `allowedTransitions` |
+| POST | `/api/admin/orders/:id/status` `{status, note}` | Manual status change, only along `ADMIN_STATUS_TRANSITIONS` (`src/orderStatus.ts`). Event source `admin`. `delivered` stamps `deliveredAt` once |
+| POST | `/api/admin/orders/:id/gelato-sync` | Reads the order from Gelato (`GET /v4/orders/{id}`, unverified shape) and applies it through the webhook's own code path (`src/orderStatusUpdate.ts`) |
+| POST | `/api/admin/orders/:id/gelato-reconcile` | For "Gelato submission has an unknown outcome": `{gelatoOrderId}` (it exists at Gelato) or `{clearSubmitMarker: true}` (it doesn't; the retry submits again), then retries fulfilment |
+| GET | `/api/admin/storage/summary?refresh=1` | R2 objects and bytes by category (raw / processed / printPdf / other). Lists the whole bucket, cached in Redis for 10 minutes |
+| GET | `/api/admin/storage/sessions/:sessionId` | A session's files (key, size, date, category), deletion markers, orders and schedule. No URLs; files can't be downloaded through the admin API |
+| GET | `/api/admin/deletions/scheduled?kind=&withinDays=&cursor=&limit=` | Upcoming deletions from the sweeper's own candidate SQL + `schedule.ts` |
+| GET | `/api/admin/deletions/audit?trigger=&outcome=&sessionId=&from=&to=` | `DeletionAuditLog`, filtered and paged |
+| POST | `/api/admin/deletions/sessions/:sessionId` `{scope, confirm: "DELETE", dryRun?, force?}` | Manual deletion via `deleteSessionAssets`. 409 while an order holds the session unless `force`. Not affected by `GDPR_DELETION_DRY_RUN` |
+| POST | `/api/admin/deletions/sweep` `{dryRun?}` | Enqueues one sweep now (dry run by default; `GDPR_DELETION_DRY_RUN` still wins) |
+
+List endpoints take `page` (from 1) and `limit` (max 100); scheduled deletions use a keyset `cursor`.
 
 ## Session expiry
 

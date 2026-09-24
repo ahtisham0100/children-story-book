@@ -40,6 +40,14 @@ const STAGE_JOB_TIMEOUT_MS = 10 * 60_000;
 
 const queues = new Map<StageName, Queue<StageJobData, StageJobResult>>();
 function getQueue(stage: StageName): Queue<StageJobData, StageJobResult> {
+  return getStageQueue(stage);
+}
+
+/**
+ * The shared Queue for one stage (the admin queue monitor reads it too).
+ * `stage` is typed StageName, so only the five known queue names can be built.
+ */
+export function getStageQueue(stage: StageName): Queue<StageJobData, StageJobResult> {
   let q = queues.get(stage);
   if (!q) {
     q = new Queue(stageQueueName(stage), { connection: createQueueRedisConnection() });

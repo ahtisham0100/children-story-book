@@ -51,6 +51,12 @@ export const env = {
   //  - DELETE /api/account/my-data (irreversible; one real call is all anyone needs)
   RL_MY_DATA_IP_MAX: Number(readOptional("RL_MY_DATA_IP_MAX") ?? "5"),
   RL_MY_DATA_WINDOW_MIN: Number(readOptional("RL_MY_DATA_WINDOW_MIN") ?? "60"),
+  //  - /api/admin/* (src/admin/plugin.ts): every request per IP, plus a
+  //    tighter budget for POSTs. The dashboard polls queues every 5s (about 24
+  //    reads a minute per open tab), so the read budget is generous.
+  RL_ADMIN_IP_MAX: Number(readOptional("RL_ADMIN_IP_MAX") ?? "600"),
+  RL_ADMIN_MUTATION_IP_MAX: Number(readOptional("RL_ADMIN_MUTATION_IP_MAX") ?? "60"),
+  RL_ADMIN_WINDOW_MIN: Number(readOptional("RL_ADMIN_WINDOW_MIN") ?? "10"),
 
   // Which backend runs the swap stage:
   //   replicate (default) — hosted only. A checkout without the local service

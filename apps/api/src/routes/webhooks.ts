@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { prisma } from "../db";
 import { env } from "../env";
 import { stripe } from "../stripeClient";
-import { canTransitionToPaid, mapGelatoStatus, ORDER_STATUS, type OrderStatus } from "../orderStatus";
+import { canTransitionToPaid, ORDER_STATUS, type OrderStatus } from "../orderStatus";
+import { applyGelatoStatus } from "../orderStatusUpdate";
 import { enqueueFulfillment } from "../queue";
 import { isGelatoWebhookAuthorized } from "../print/gelatoWebhookAuth";
 
@@ -122,27 +123,10 @@ export async function registerWebhookRoutes(app: FastifyInstance, _opts: Fastify
       return reply.code(200).send({ received: true });
     }
 
-    const mapped = mapGelatoStatus(status);
-    await prisma.orderStatusEvent.create({
-      data: {
-        orderId: orderReferenceId,
-        status: mapped ?? status,
-        source: "gelato_webhook",
-        raw: payload as object,
-      },
-    });
-    if (mapped) {
-      await prisma.order.update({ where: { id: orderReferenceId }, data: { status: mapped } });
-      // GDPR Pathway 2 anchors on the FIRST delivery report. The deliveredAt
-      // IS NULL condition makes a re-sent "delivered" webhook a no-op, so it
-      // can never push the deletion date back (src/gdpr/schedule.ts).
-      if (mapped === ORDER_STATUS.delivered) {
-        await prisma.order.updateMany({
-          where: { id: orderReferenceId, deliveredAt: null },
-          data: { deliveredAt: new Date() },
-        });
-      }
-    } else {
+    // Shared with the admin "Sync from Gelato" button (src/orderStatusUpdate.ts),
+    // including the once-only deliveredAt stamp that anchors GDPR Pathway 2.
+    const mapped = await applyGelatoStatus(orderReferenceId, status, payload as object, "gelato_webhook");
+    if (!mapped) {
       request.log.warn(`Unrecognized Gelato status "${status}" for order ${orderReferenceId} — stored raw, order.status left unchanged.`);
     }
 

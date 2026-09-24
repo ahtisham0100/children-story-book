@@ -100,9 +100,10 @@ scheduler is created.
 
 **Audit log.** `DeletionAuditLog` holds: `createdAt`, `trigger` (`auto_p1` | `auto_p2_raw` | `auto_p2_processed` |
 `user` | `admin`), `scope` (`raw` | `processed` | `all` | `account`), `sessionId` (no FK), `fileCount`, `actor`
-(customerId or `"system"`), `dryRun`, `outcome`, `error`. There's one row per `deleteSessionAssets` call, plus one
-`account` row per P3 request. It never holds an email, name or object key. (The `admin` trigger is reserved for the
-admin override, not built yet.)
+(customerId or `"system"`), `dryRun`, `outcome`, `error`, and `force` (added with the admin API, migration
+`20260924120000_admin_actions`). There's one row per `deleteSessionAssets` call, plus one `account` row per P3
+request. It never holds an email, name or object key. The `admin` trigger is the admin override
+(`POST /api/admin/deletions/sessions/:sessionId`, see apps/api/README.md), with `actor` = the admin's customer id.
 
 **Dry-run volume.** Markers aren't set in a dry run, so every due session gets a new audit row on every sweep.
 Existing sessions were backfilled with `createdAt + 72h`, so on an existing database most unordered sessions are
@@ -176,10 +177,14 @@ email, the receipt PDF, `/confirmation`, `/set-password` and the checkout consen
 | `GDPR_SWEEP_MAX_PER_RUN` | 1000 | per pathway per run |
 | `RL_MY_DATA_IP_MAX` / `RL_MY_DATA_WINDOW_MIN` | 5 / 60 | `DELETE /api/account/my-data` per IP (every attempt counts) |
 
+## Built later (2026-09-24, Milestone 4 slices 4-5)
+
+- The `/account` My Data tab (reads `GET /api/account/my-data`, which now also returns each item's `pathway`).
+- The admin override by session id and the rest of the admin API (apps/api/README.md, "Admin role and admin
+  API"). The override refuses (409) a session held by an order in production unless `force: true`, which is
+  recorded in the audit row.
+
 ## Not built (later sessions)
 
-- The admin override by session id: `deleteSessionAssets(id, { scope: "all", trigger: "admin", actor: adminId })`
-  behind `requireAdmin`.
-- The `/account` My Data tab (it will read `GET /api/account/my-data`).
-- `/admin`.
+- `/admin` pages (slice 6).
 - Reminder emails before deleting unordered previews.

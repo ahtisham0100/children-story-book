@@ -155,7 +155,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       schema: {
         tags: ["auth"],
         response: {
-          200: Type.Object({ id: Type.String(), email: Type.String(), hasPassword: Type.Boolean() }),
+          // role lets the web app show /admin (or "Not authorised"). Cosmetic only:
+          // every /api/admin route checks the role itself (src/admin/plugin.ts).
+          200: Type.Object({ id: Type.String(), email: Type.String(), hasPassword: Type.Boolean(), role: Type.String() }),
           401: ErrorResponse,
         },
       },
@@ -163,7 +165,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const customer = await getCustomerFromRequest(request);
       if (!customer) return reply.code(401).send({ message: "Not authenticated." });
-      return { id: customer.id, email: customer.email, hasPassword: customer.passwordHash !== null };
+      return { id: customer.id, email: customer.email, hasPassword: customer.passwordHash !== null, role: customer.role };
     },
   );
 

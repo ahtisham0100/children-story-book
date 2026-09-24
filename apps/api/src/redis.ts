@@ -38,3 +38,12 @@ export function createRedisConnection(): Redis {
 export function createQueueRedisConnection(): Redis {
   return baseConnection({});
 }
+
+// One shared fail-fast connection for small cache reads/writes (the admin
+// storage summary). Fail-fast like the Queue connection: a cache miss because
+// Redis is down should fall through to computing the value, not hang.
+let cacheConnection: Redis | undefined;
+export function getCacheRedis(): Redis {
+  cacheConnection ??= baseConnection({ maxRetriesPerRequest: 1 });
+  return cacheConnection;
+}

@@ -8,11 +8,17 @@ import { runGdprSweep, totalFailed, type SweepResult } from "./gdpr/sweeper";
  * One scheduled sweep. Every due session is attempted even if some fail; only
  * then does the job fail, so BullMQ keeps it (removeOnFail:false) with an
  * error naming the failed sessions. The returned summary is stored as the
- * job's return value for the future admin dashboard.
+ * job's return value, shown in the admin queue monitor.
  */
-export async function processGdprJob(job: Job): Promise<SweepResult> {
-  console.log(`[gdpr] sweep job ${job.id ?? "-"} started${env.GDPR_DELETION_DRY_RUN ? " (DRY RUN)" : ""}`);
-  const result = await runGdprSweep();
+export async function processGdprJob(job: Job<{ dryRun?: boolean } | undefined>): Promise<SweepResult> {
+  // Scheduled jobs carry no data. A manual sweep from the admin dashboard
+  // (POST /api/admin/deletions/sweep) may ask for a dry run; it can never ask
+  // its way past GDPR_DELETION_DRY_RUN (runGdprSweep ORs the two).
+  const dryRun = job.data?.dryRun === true;
+  console.log(
+    `[gdpr] sweep job ${job.id ?? "-"} started${env.GDPR_DELETION_DRY_RUN || dryRun ? " (DRY RUN)" : ""}`,
+  );
+  const result = await runGdprSweep({ dryRun });
   const failed = totalFailed(result);
   if (failed > 0) {
     const ids = [...result.p1.failedSessionIds, ...result.p2Raw.failedSessionIds, ...result.p2Processed.failedSessionIds];

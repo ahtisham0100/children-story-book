@@ -82,3 +82,33 @@ export async function submitOrderToGelato(order: GelatoOrderInput): Promise<{ ge
   }
   return { gelatoOrderId };
 }
+
+/**
+ * Reads one order back from Gelato (GET /v4/orders/{id}) for the admin
+ * "Sync from Gelato" button, which applies the status through the webhook's
+ * own code path (src/orderStatusUpdate.ts).
+ *
+ * SAME CAVEAT AS submitOrderToGelato: written from Gelato's documented v4 API,
+ * unverified against a real account. The status is read from
+ * `fulfillmentStatus` (v4's name for it), falling back to `status`. An
+ * unrecognised value is stored raw and doesn't change the order, so a wrong
+ * guess here is visible in the timeline rather than corrupting the status.
+ * Only the status is returned: the response also holds the shipping address,
+ * which the admin API has no reason to copy anywhere.
+ */
+export async function getGelatoOrder(gelatoOrderId: string): Promise<{ status: string }> {
+  const response = await fetch(`${GELATO_ORDERS_URL}/${encodeURIComponent(gelatoOrderId)}`, {
+    method: "GET",
+    headers: { "X-API-KEY": env.GELATO_API_KEY ?? "" },
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Gelato order fetch failed: ${response.status} ${body.slice(0, 300)}`);
+  }
+  const data = (await response.json()) as { fulfillmentStatus?: unknown; status?: unknown };
+  const status = typeof data.fulfillmentStatus === "string" ? data.fulfillmentStatus : data.status;
+  if (typeof status !== "string" || !status) {
+    throw new Error("Gelato order response had no fulfillmentStatus/status field.");
+  }
+  return { status };
+}

@@ -248,4 +248,21 @@ describe("the BullMQ job", () => {
     await expect(processGdprJob(job)).rejects.toThrow(/1 session/);
     expect(h.deleteSessionAssets).toHaveBeenCalledTimes(2);
   });
+
+  it("honours dryRun on a manual sweep job (POST /api/admin/deletions/sweep)", async () => {
+    h.state.env.GDPR_DELETION_DRY_RUN = false;
+    unorderedExpired("s1");
+    h.state.candidates.p1 = ["s1"];
+    const manual = { id: "m1", data: { dryRun: true } } as unknown as Job;
+    await expect(processGdprJob(manual)).resolves.toMatchObject({ dryRun: true });
+    expect(h.deleteSessionAssets.mock.calls[0]![1]).toMatchObject({ dryRun: true });
+  });
+
+  it("a manual job asking for a real run still can't override GDPR_DELETION_DRY_RUN", async () => {
+    h.state.env.GDPR_DELETION_DRY_RUN = true;
+    unorderedExpired("s1");
+    h.state.candidates.p1 = ["s1"];
+    const manual = { id: "m2", data: { dryRun: false } } as unknown as Job;
+    await expect(processGdprJob(manual)).resolves.toMatchObject({ dryRun: true });
+  });
 });

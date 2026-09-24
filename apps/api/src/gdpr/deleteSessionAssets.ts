@@ -4,7 +4,7 @@ import { deleteObjects, listObjectKeys, objectExists } from "../storage";
 
 /**
  * THE deletion primitive for GDPR photo deletion. Every pathway (the P1/P2
- * sweeper, the customer's DELETE /api/account/my-data, a future admin
+ * sweeper, the customer's DELETE /api/account/my-data, the admin
  * override) goes through here, so the guarantees hold everywhere:
  *
  *  - Finds objects two ways: by LISTING the session's own R2 prefixes (catches
@@ -34,6 +34,8 @@ export interface DeleteSessionAssetsOptions {
   /** customerId, admin customerId, or "system". Never an email. */
   actor: string;
   dryRun: boolean;
+  /** Admin override of the "held by an order in production" refusal; recorded in the audit row. */
+  force?: boolean;
 }
 
 export interface DeleteSessionAssetsResult {
@@ -58,7 +60,8 @@ export class GdprDeletionError extends Error {
 // Ids become R2 key prefixes, so they must not contain "/" or be empty: an id
 // of "" would turn `sessions/<id>/` into `sessions//` and a "/" could reach a
 // different session's folder. Real ids are UUIDs (seeded ones gdpr-test-<uuid>).
-const SAFE_ID = /^[A-Za-z0-9-]+$/;
+// Exported so the admin routes validate ids the same way before listing or deleting.
+export const SAFE_ID = /^[A-Za-z0-9-]+$/;
 
 const includesRaw = (scope: DeletionScope) => scope === "raw" || scope === "all";
 const includesProcessed = (scope: DeletionScope) => scope === "processed" || scope === "all";
@@ -107,6 +110,7 @@ async function writeAudit(
       fileCount,
       actor: options.actor,
       dryRun: options.dryRun,
+      force: options.force ?? false,
       outcome,
       error,
     },

@@ -95,20 +95,35 @@ export async function getObjectBuffer(key: string): Promise<Buffer> {
 
 // --- GDPR deletion (src/gdpr/) -----------------------------------------
 
-/** Every key under `prefix`, following ListObjectsV2 pagination to the end. */
-export async function listObjectKeys(prefix: string): Promise<string[]> {
-  const keys: string[] = [];
+export interface StoredObject {
+  key: string;
+  size: number;
+  lastModified: Date | null;
+}
+
+/**
+ * Every object under `prefix` with its size, following ListObjectsV2
+ * pagination to the end. "" lists the whole bucket (the admin storage
+ * summary, which caches the result because of that).
+ */
+export async function listObjects(prefix: string): Promise<StoredObject[]> {
+  const objects: StoredObject[] = [];
   let continuationToken: string | undefined;
   do {
     const page = await r2.send(
       new ListObjectsV2Command({ Bucket: env.R2_BUCKET_NAME, Prefix: prefix, ContinuationToken: continuationToken }),
     );
     for (const object of page.Contents ?? []) {
-      if (object.Key) keys.push(object.Key);
+      if (object.Key) objects.push({ key: object.Key, size: object.Size ?? 0, lastModified: object.LastModified ?? null });
     }
     continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
   } while (continuationToken);
-  return keys;
+  return objects;
+}
+
+/** Every key under `prefix`, following ListObjectsV2 pagination to the end. */
+export async function listObjectKeys(prefix: string): Promise<string[]> {
+  return (await listObjects(prefix)).map((object) => object.key);
 }
 
 // DeleteObjects accepts at most 1000 keys per request.

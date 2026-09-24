@@ -12,14 +12,14 @@ import { registerWebhookRoutes } from "./routes/webhooks";
 import { registerOrderRoutes } from "./routes/orders";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerAccountRoutes } from "./routes/account";
+import { registerAdminRoutes } from "./admin/plugin";
+import { corsOptions } from "./cors";
 
 export async function buildApp() {
   const app = Fastify({ logger: true, trustProxy: env.TRUST_PROXY }).withTypeProvider<TypeBoxTypeProvider>();
 
-  // credentials:true so the browser sends/stores the session cookie on
-  // cross-origin (web:3000 -> api:3001) requests. This requires a concrete
-  // origin list, never "*", which is exactly what env.CORS_ORIGIN already is.
-  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  // Origin allowlist with credentials; see src/cors.ts (also part of the admin CSRF defence).
+  await app.register(cors, corsOptions());
   await app.register(cookie);
   // global:false — only the routes that opt in (via src/rateLimit.ts) are limited.
   await app.register(rateLimit, { global: false });
@@ -44,6 +44,8 @@ export async function buildApp() {
   await registerOrderRoutes(app);
   await registerAuthRoutes(app);
   await registerAccountRoutes(app);
+  // Encapsulated plugin: its auth/CSRF/rate-limit hooks apply to /api/admin/* only.
+  await app.register(registerAdminRoutes);
   await app.register(registerWebhookRoutes);
 
   return app;

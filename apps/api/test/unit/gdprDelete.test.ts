@@ -161,7 +161,7 @@ describe("audit log", () => {
       outcome: "succeeded",
     });
     expect(Object.keys(row).sort()).toEqual(
-      ["actor", "dryRun", "error", "fileCount", "outcome", "scope", "sessionId", "trigger"].sort(),
+      ["actor", "dryRun", "error", "fileCount", "force", "outcome", "scope", "sessionId", "trigger"].sort(),
     );
     expect(JSON.stringify(row)).not.toContain("Ada");
     expect(JSON.stringify(row)).not.toContain("raw.jpg");

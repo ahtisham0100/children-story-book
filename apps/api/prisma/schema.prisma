@@ -181,7 +181,30 @@ model DeletionAuditLog {
   dryRun    Boolean
   outcome   String // succeeded | failed
   error     String?
+  // An admin override that deleted a session still held by an order in
+  // production (POST /api/admin/deletions/sessions/:id with force:true).
+  force     Boolean  @default(false)
 
   @@index([createdAt])
   @@index([sessionId])
+}
+
+// One row per state-changing admin action other than a deletion (deletions
+// are in DeletionAuditLog with trigger "admin"): job retries, manual order
+// status changes, Gelato sync/reconcile, manual sweeps. adminId has no foreign
+// key so the record outlives the admin's account. before/after hold only the
+// fields the action changed (statuses, Gelato ids), never emails or addresses.
+model AdminActionLog {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  adminId    String
+  action     String // job.retry | order.status | order.gelato_sync | order.gelato_reconcile | gdpr.sweep
+  targetType String // job | order | queue
+  targetId   String
+  before     Json?
+  after      Json?
+  note       String?
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
 }
