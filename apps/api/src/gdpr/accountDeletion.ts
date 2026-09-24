@@ -3,7 +3,7 @@ import { prisma } from "../db";
 import { stripe } from "../stripeClient";
 import { ORDER_STATUS } from "../orderStatus";
 import { deleteSessionAssets } from "./deleteSessionAssets";
-import { deletionSchedule } from "./schedule";
+import { deletionSchedule, type DeletionPathway } from "./schedule";
 
 /**
  * GDPR Pathway 3: a logged-in customer deletes their data
@@ -45,6 +45,13 @@ export type AccountDeletionResult =
       /** Sessions also used by another customer's order: left alone. */
       sessionsKeptShared: number;
     };
+
+// Prisma's default interactive-transaction timeout is 5s. This transaction does
+// one write per order and per item, sequentially, and against a remote
+// database a customer with a few orders exceeded 5s (P2028 "Transaction not
+// found", found in live testing 2026-09-24). It rolls back cleanly either way
+// (R2 is already clean and a retry re-runs step 4), but the customer got a 500.
+const ACCOUNT_TX_OPTIONS = { maxWait: 10_000, timeout: 60_000 };
 
 // PaymentIntent states in which money has moved or is moving: the order is
 // about to become "paid", so it must be treated like one.
@@ -175,7 +182,7 @@ export async function deleteCustomerData(customerId: string): Promise<AccountDel
           error: null,
         },
       });
-    });
+    }, ACCOUNT_TX_OPTIONS);
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 500);
     await prisma.deletionAuditLog
@@ -201,6 +208,8 @@ export interface MyDataItem {
   bookTitle: string;
   photos: "stored" | "deleted";
   bookFiles: "stored" | "deleted";
+  /** Which deletion rule applies (schedule.ts): p1 unordered, p2 delivered, held while an order needs the files. */
+  pathway: DeletionPathway;
   photosDeletionDueAt: string | null;
   bookFilesDeletionDueAt: string | null;
 }
@@ -255,6 +264,7 @@ export async function customerDataStatus(customerId: string): Promise<MyDataOrde
           bookTitle: item.bookTitle,
           photos: "deleted" as const,
           bookFiles: "deleted" as const,
+          pathway: "p2" as const,
           photosDeletionDueAt: null,
           bookFilesDeletionDueAt: null,
         };
@@ -270,6 +280,7 @@ export async function customerDataStatus(customerId: string): Promise<MyDataOrde
         bookTitle: item.bookTitle,
         photos: session.rawDeletedAt ? ("deleted" as const) : ("stored" as const),
         bookFiles: session.processedDeletedAt ? ("deleted" as const) : ("stored" as const),
+        pathway: schedule.pathway,
         photosDeletionDueAt: iso(schedule.rawDueAt),
         bookFilesDeletionDueAt: iso(schedule.processedDueAt),
       };

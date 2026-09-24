@@ -22,6 +22,7 @@ const MyDataItemView = Type.Object({
   bookTitle: Type.String(),
   photos: Type.Union([Type.Literal("stored"), Type.Literal("deleted")]),
   bookFiles: Type.Union([Type.Literal("stored"), Type.Literal("deleted")]),
+  pathway: Type.Union([Type.Literal("p1"), Type.Literal("p2"), Type.Literal("held")]),
   photosDeletionDueAt: Type.Union([Type.String(), Type.Null()]),
   bookFilesDeletionDueAt: Type.Union([Type.String(), Type.Null()]),
 });
@@ -125,7 +126,7 @@ export async function registerAccountRoutes(app: FastifyInstance) {
   );
 
   // GDPR: what we hold per order and when it will be deleted (src/gdpr/schedule.ts).
-  // For the future /account "My Data" tab.
+  // Read by the /account "My Data" tab.
   api.get(
     "/api/account/my-data",
     { schema: { tags: ["account"], response: { 200: MyDataView, 401: ErrorResponse } } },

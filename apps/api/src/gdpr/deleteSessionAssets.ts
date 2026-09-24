@@ -213,6 +213,8 @@ export async function deleteSessionAssets(
     }
 
     const now = new Date();
+    // Explicit timeout: one write per order item, and Prisma's 5s default is
+    // too tight against a remote database (see accountDeletion.ts).
     await prisma.$transaction(async (tx) => {
       if (includesRaw(scope) && session) {
         await tx.character.updateMany({ where: { sessionId }, data: { rawKey: null } });
@@ -236,7 +238,7 @@ export async function deleteSessionAssets(
         await tx.session.update({ where: { id: sessionId }, data });
       }
       await writeAudit(tx, sessionId, options, deletedCount, "succeeded");
-    });
+    }, { maxWait: 10_000, timeout: 30_000 });
 
     return { sessionId, scope, fileCount: deletedCount, dryRun };
   } catch (error) {

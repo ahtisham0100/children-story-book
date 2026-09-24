@@ -436,6 +436,7 @@ describe("GET /api/account/my-data", () => {
         bookTitle: "Space Book",
         photos: "deleted",
         bookFiles: "stored",
+        pathway: "p2",
         photosDeletionDueAt: "2026-09-02T10:00:00.000Z",
         bookFilesDeletionDueAt: "2026-10-01T10:00:00.000Z",
       },
@@ -445,6 +446,7 @@ describe("GET /api/account/my-data", () => {
     const abandoned = body.orders.find((o: { id: string }) => o.id === "o-abandoned");
     expect(abandoned.items[0]).toMatchObject({
       photos: "stored",
+      pathway: "p1",
       photosDeletionDueAt: "2026-08-26T00:00:00.000Z",
       bookFilesDeletionDueAt: null,
     });

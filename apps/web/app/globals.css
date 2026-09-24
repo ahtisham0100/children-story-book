@@ -721,3 +721,96 @@ h1, h2, h3 {
 .status-pill--delivered { background: rgba(62, 106, 73, 0.15); color: var(--color-forest-deep); }
 .status-pill--failed,
 .status-pill--cancelled { background: rgba(180, 69, 58, 0.14); color: var(--color-danger); }
+
+/* ---- Buttons: destructive ---- */
+.btn-danger {
+  background: var(--color-danger);
+  color: var(--color-cream);
+  box-shadow: 0 1px 2px rgba(53, 37, 26, 0.12), 0 10px 24px -12px rgba(180, 69, 58, 0.55);
+}
+.btn-danger:hover:not(:disabled) { background: #963529; transform: translateY(-1px); }
+.btn-danger:active:not(:disabled) { transform: translateY(0); }
+
+/* ---- Tabs (WAI-ARIA tablist; account page, admin) ---- */
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: var(--color-cream-deep);
+  padding: 4px;
+  border-radius: 11px;
+}
+.tabs__tab {
+  padding: 9px 18px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tabs__tab:hover { color: var(--color-ink); }
+.tabs__tab--active {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  box-shadow: 0 1px 3px rgba(53, 37, 26, 0.08);
+}
+.tabs__tab:focus-visible,
+.tabs__panel:focus-visible {
+  outline: 2px solid var(--color-forest);
+  outline-offset: 2px;
+}
+
+/* ---- Modal (ConfirmModal) ---- */
+.modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 26px 22px;
+}
+.modal:focus { outline: none; }
+.modal__title { font-size: 21px; margin: 0 0 12px; }
+.modal__body { font-size: 14.5px; color: var(--color-ink-soft); }
+.modal__body p { margin: 0 0 10px; }
+.modal__body strong { color: var(--color-ink); }
+.modal__confirm-field { margin: 16px 0 12px; }
+.modal__error { margin: 8px 0 4px; font-size: 14px; }
+.modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.modal__actions .btn { padding: 11px 22px; }
+
+/* ---- Account: My Data ---- */
+.my-data__items { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.my-data__item { border-top: 1px solid var(--color-line); padding-top: 12px; }
+.my-data__item-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.my-data__title { font-weight: 600; }
+.my-data__schedule { margin: 6px 0 0; font-size: 13.5px; color: var(--color-ink-soft); line-height: 1.55; }
+.my-data__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.my-data__badge--stored { background: rgba(198, 154, 92, 0.18); color: #8a6a2f; }
+.my-data__badge--partial { background: rgba(62, 106, 73, 0.1); color: var(--color-forest); }
+.my-data__badge--deleted { background: rgba(62, 106, 73, 0.15); color: var(--color-forest-deep); }
+.my-data__danger { margin-top: 28px; padding: 20px 22px; border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-line)); }
+.my-data__danger-title { font-size: 18px; margin: 0 0 6px; }
+.my-data__danger-body { margin: 0 0 16px; font-size: 14px; color: var(--color-ink-soft); }
+.my-data__blocked { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; }
