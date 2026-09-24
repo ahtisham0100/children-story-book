@@ -4,6 +4,8 @@ export interface Me {
   id: string;
   email: string;
   hasPassword: boolean;
+  /** "customer" | "admin". Only decides what the UI shows; the API checks the role itself. */
+  role: string;
 }
 
 /** Current logged-in customer, or null if not authenticated (401). */

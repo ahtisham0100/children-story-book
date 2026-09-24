@@ -28,6 +28,7 @@ vi.mock("../../src/gdpr/deleteSessionAssets", () => ({
 vi.mock("../../src/gdpr/candidates", () => ({
   findCandidates: h.findCandidates,
   loadScheduleInput: h.loadScheduleInput,
+  loadScheduleInputs: h.loadScheduleInputs,
 }));
 
 import { registerAdminRoutes } from "../../src/admin/plugin";

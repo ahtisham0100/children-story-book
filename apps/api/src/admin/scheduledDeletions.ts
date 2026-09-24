@@ -1,4 +1,4 @@
-import { findCandidates, loadScheduleInput, type CandidateKind } from "../gdpr/candidates";
+import { findCandidates, loadScheduleInputs, type CandidateKind } from "../gdpr/candidates";
 import {
   deletionSchedule,
   P1_GRACE_MS,
@@ -76,9 +76,13 @@ export async function listScheduledDeletions(options: {
     limit: options.limit,
   });
 
+  // Batched read (the sweeper's per-session loadScheduleInput took over 13s for
+  // a page of 50 against the remote database), same fields, same schedule.ts.
+  const inputs = await loadScheduleInputs(ids);
+
   const items: ScheduledDeletion[] = [];
   for (const sessionId of ids) {
-    const input = await loadScheduleInput(sessionId);
+    const input = inputs.get(sessionId);
     if (!input) continue;
     const dueAt = spec.dueAt(input.session, deletionSchedule(input.session, input.orders));
     if (!dueAt || dueAt.getTime() > horizon) continue;

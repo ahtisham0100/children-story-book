@@ -253,6 +253,15 @@ export function createAdminHarness() {
   }));
   const findCandidates = vi.fn(async (_kind: string, _q: Row): Promise<string[]> => []);
   const loadScheduleInput = vi.fn(async (_id: string): Promise<Row | null> => null);
+  // Batched variant, built on the per-session stub so tests configure one thing.
+  const loadScheduleInputs = vi.fn(async (ids: string[]) => {
+    const map = new Map<string, Row>();
+    for (const id of ids) {
+      const input = await loadScheduleInput(id);
+      if (input) map.set(id, input);
+    }
+    return map;
+  });
   const listObjects = vi.fn(async (_prefix: string): Promise<{ key: string; size: number; lastModified: Date | null }[]> => []);
   const getGelatoOrder = vi.fn(async (_id: string) => ({ status: "shipped" }));
   const redisStore = new Map<string, string>();
@@ -294,6 +303,7 @@ export function createAdminHarness() {
     deleteSessionAssets,
     findCandidates,
     loadScheduleInput,
+    loadScheduleInputs,
     listObjects,
     getGelatoOrder,
     redis,

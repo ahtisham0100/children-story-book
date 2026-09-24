@@ -12,6 +12,20 @@ pages:
 - `/confirmation` — receipt + GDPR photo-deletion timeline for a completed order.
 - `/track/[orderId]` — public order-status timeline, no login required.
 
+Added later (Milestone 4):
+
+- `/account` — tabs: **Orders** and **My Data** (photo status, deletion dates, "Delete my data now").
+- `/admin` — internal dashboard for customers with `role = "admin"` (`npm run make-admin -- <email>` in
+  apps/api): **Queues** (counts, jobs, failed-job inspector, retry, Gelato reconcile), **Orders** (filters,
+  timeline, status changes, Gelato sync), **Storage** (R2 usage, per-session files), **Deletions**
+  (scheduled, audit log, manual override, sweep now). `lib/admin.ts` sends the `X-Admin-Request` header the
+  API requires. The page gate is cosmetic; the API checks the role on every call. Demo data:
+  `npx tsx test/seed-admin-demo.mts` in apps/api.
+
+Every page is a client component that fetches in the browser: a server-side fetch crashes the Next 14 dev
+worker in this repo (see `app/track/[orderId]/page.tsx`). Destructive or state-changing actions go through
+`components/ConfirmModal.tsx`.
+
 **Do not confuse this with the homepage that also exists.** A separate,
 self-contained personalization UI lives at `apps/api/homepage`
 (`npm run homepage`, port 5174) — that's still where a book is actually

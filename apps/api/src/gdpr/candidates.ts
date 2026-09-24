@@ -79,3 +79,38 @@ export async function loadScheduleInput(
   });
   return { session, orders };
 }
+
+/**
+ * loadScheduleInput for many sessions in three queries instead of two per
+ * session, for read-only views (the admin "scheduled deletions" table). Same
+ * fields, so deletionSchedule() sees exactly what the sweeper would. The
+ * sweeper itself keeps the per-session read: re-reading each session right
+ * before deleting it is its safety check.
+ */
+export async function loadScheduleInputs(
+  sessionIds: string[],
+): Promise<Map<string, { session: ScheduleSession; orders: ScheduleOrder[] }>> {
+  const result = new Map<string, { session: ScheduleSession; orders: ScheduleOrder[] }>();
+  if (sessionIds.length === 0) return result;
+  const sessions = await prisma.session.findMany({
+    where: { id: { in: sessionIds } },
+    select: { id: true, expiresAt: true, rawDeletedAt: true, processedDeletedAt: true },
+  });
+  const items = await prisma.orderItem.findMany({
+    where: { sessionId: { in: sessionIds } },
+    select: { sessionId: true, orderId: true },
+  });
+  const orders = await prisma.order.findMany({
+    where: { id: { in: [...new Set(items.map((item) => item.orderId))] } },
+    select: { id: true, status: true, deliveredAt: true },
+  });
+  const orderById = new Map(orders.map((o) => [o.id, { status: o.status, deliveredAt: o.deliveredAt }]));
+  for (const { id, ...session } of sessions) {
+    const orderIds = new Set(items.filter((item) => item.sessionId === id).map((item) => item.orderId));
+    result.set(id, {
+      session,
+      orders: [...orderIds].map((orderId) => orderById.get(orderId)).filter((o): o is ScheduleOrder => o !== undefined),
+    });
+  }
+  return result;
+}

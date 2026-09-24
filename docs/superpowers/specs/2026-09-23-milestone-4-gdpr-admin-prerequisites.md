@@ -2,7 +2,8 @@
 
 Status: **prerequisites done (2026-09-23). GDPR deletion backend (Pathways 1-3, audit log) built 2026-09-24**, see
 [2026-09-24-gdpr-deletion-design.md](2026-09-24-gdpr-deletion-design.md), which also resolves the "Gaps noticed"
-below. Still to build: the admin deletion override, `/account` My Data tab, and `/admin`.
+below. The admin deletion override, `/account` My Data tab and `/admin` were built the same day (slices 4-6); see
+apps/api/README.md ("Admin role and admin API") and apps/web/README.md.
 
 ## Scope (as agreed with the client)
 

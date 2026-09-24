@@ -184,7 +184,9 @@ email, the receipt PDF, `/confirmation`, `/set-password` and the checkout consen
   API"). The override refuses (409) a session held by an order in production unless `force: true`, which is
   recorded in the audit row.
 
+- `/admin` pages (slice 6): queues, orders, storage, deletions (apps/web/README.md). Demo data:
+  `npx tsx test/seed-admin-demo.mts` (apps/api).
+
 ## Not built (later sessions)
 
-- `/admin` pages (slice 6).
 - Reminder emails before deleting unordered previews.
