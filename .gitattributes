@@ -1,0 +1,11 @@
+# Normalize line endings — commit LF, check out native on each platform
+* text=auto eol=lf
+
+# Binary assets — never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.onnx binary

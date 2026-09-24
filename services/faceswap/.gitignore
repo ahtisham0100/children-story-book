@@ -1,0 +1,10 @@
+# The python environment and anything downloaded/generated at runtime.
+.venv/
+*.log
+__pycache__/
+_validate_detect.py
+
+# Model weights are large and (for inswapper) licensed — never commit them.
+# The directory is kept via the marker files below.
+models/*
+!models/PLACE_INSWAPPER_HERE.txt

@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Personalized Children's Book — Local Pipeline</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #fff; --ink: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --accent: #4f46e5; --ok: #16a34a; --bad: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { background: #0f172a; color: #fff; padding: 22px 28px; }
+  header h1 { margin: 0; font-size: 21px; }
+  header p { margin: 5px 0 0; color: #94a3b8; font-size: 14px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 26px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+  .tab { padding: 10px 18px; border: 1px solid var(--line); border-radius: 9px;
+    background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 13px;
+    padding: 22px; margin-bottom: 20px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card .sub { color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
+
+  .slots { display: flex; gap: 16px; flex-wrap: wrap; }
+  /* Capped so a single slot doesn't stretch to a full-width 4:3 slab. */
+  .slot { flex: 0 1 300px; min-width: 210px; max-width: 320px; }
+  .slot label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 7px; }
+  .drop { border: 2px dashed #cbd5e1; border-radius: 11px; background: #fbfcfe;
+    aspect-ratio: 4/3; display: grid; place-items: center; cursor: pointer;
+    overflow: hidden; position: relative; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #f5f4ff; }
+  .drop img { width: 100%; height: 100%; object-fit: cover; }
+  .drop span { color: var(--muted); font-size: 13px; text-align: center; padding: 0 14px; }
+  .drop input { display: none; }
+
+  .actions { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+  button.go { background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 12px 26px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button.go:disabled { background: #c7d2fe; cursor: not-allowed; }
+  .eta { color: var(--muted); font-size: 13.5px; }
+  .eta b { color: var(--ink); }
+
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); }
+  .res { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #fff; }
+  .res .top { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .res .name { font-weight: 700; font-size: 13.5px; text-transform: capitalize; }
+  .res .state { font-size: 12px; color: var(--muted); }
+  .res .state.ok { color: var(--ok); font-weight: 600; }
+  .res .state.bad { color: var(--bad); font-weight: 600; }
+  .res .body { aspect-ratio: 4/3; display: grid; place-items: center; background: #f8fafc; }
+  .res .body img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
+  .res .body .wait { color: var(--muted); font-size: 13px; text-align: center; }
+  .bar { height: 3px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 40%; background: var(--accent);
+    animation: slide 1.25s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .res .dl { display: block; padding: 9px 14px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--accent); text-decoration: none; font-weight: 600; }
+
+  .err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 13px 16px; border-radius: 9px; font-size: 14px; margin-bottom: 18px; }
+  dialog { border: 0; border-radius: 12px; padding: 0; max-width: 94vw; max-height: 94vh; }
+  dialog img { display: block; max-width: 94vw; max-height: 94vh; }
+  dialog::backdrop { background: rgba(0,0,0,.72); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Personalized Children's Book — Local Pipeline</h1>
+  <p>Upload a photo. The illustration is repainted as that person, then identity-matched — real pipeline, real output. Runs the pipeline directly, in-process (no Postgres/Redis/R2 needed) — for the real end-to-end product, use the main homepage instead.</p>
+</header>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-mode="single">Single character — 2 scenes</button>
+    <button class="tab" role="tab" aria-selected="false" data-mode="multi">Two characters — 2 pages</button>
+  </div>
+
+  <div id="err" class="err hidden"></div>
+
+  <div class="card">
+    <h2 id="modeTitle">Single character</h2>
+    <div class="sub" id="modeSub">One photo produces both scenes. Any child — nothing is hard-coded to a particular face.</div>
+    <div class="slots" id="slots"></div>
+    <div class="actions">
+      <button class="go" id="go" disabled>Generate</button>
+      <div class="eta" id="eta"></div>
+    </div>
+  </div>
+
+  <!-- One grid per mode, shown/hidden rather than rebuilt: switching tabs used to
+       wipe the results of a run that was still in flight. -->
+  <div class="grid" id="grid-single"></div>
+  <div class="grid hidden" id="grid-multi"></div>
+</main>
+
+<dialog id="lightbox"><img id="lightboxImg" alt="" /></dialog>
+
+<script>
+const STAGE_LABEL = {
+  repaint: "Repainting the scene…",
+  swap: "Matching the face…",
+  restore: "Blending…",
+  heal: "Cleaning up…",
+  eyes: "Finishing the eyes…",
+};
+const SLOTS = {
+  single: [{ id: "a", label: "Photo" }],
+  multi: [
+    { id: "a", label: "Photo 1 — the child" },
+    { id: "b", label: "Photo 2 — the adult" },
+  ],
+};
+
+let mode = "single";
+const photos = {};
+// Per-mode run state, so a run survives switching tabs to look at the other one.
+const runs = {
+  single: { timer: null, eta: "", live: false, rendered: new Set() },
+  multi: { timer: null, eta: "", live: false, rendered: new Set() },
+};
+const gridFor = (m) => document.getElementById("grid-" + m);
+const anyLive = () => runs.single.live || runs.multi.live;
+
+const $ = (id) => document.getElementById(id);
+const errBox = $("err");
+
+function showError(msg) {
+  errBox.textContent = msg;
+  errBox.classList.remove("hidden");
+}
+function clearError() { errBox.classList.add("hidden"); }
+
+function renderSlots() {
+  const wrap = $("slots");
+  wrap.innerHTML = "";
+  for (const s of SLOTS[mode]) {
+    const div = document.createElement("div");
+    div.className = "slot";
+    div.innerHTML =
+      '<label>' + s.label + '</label>' +
+      '<div class="drop" data-slot="' + s.id + '">' +
+        (photos[s.id] ? '<img src="' + photos[s.id] + '" alt="">' : '<span>Click or drop a photo<br>JPEG or PNG</span>') +
+      '<input type="file" accept="image/png,image/jpeg"></div>';
+    wrap.appendChild(div);
+  }
+  wrap.querySelectorAll(".drop").forEach((d) => {
+    const input = d.querySelector("input");
+    d.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => input.files[0] && load(d.dataset.slot, input.files[0]));
+    d.addEventListener("dragover", (e) => { e.preventDefault(); d.classList.add("over"); });
+    d.addEventListener("dragleave", () => d.classList.remove("over"));
+    d.addEventListener("drop", (e) => {
+      e.preventDefault(); d.classList.remove("over");
+      const f = e.dataTransfer.files[0];
+      if (f) load(d.dataset.slot, f);
+    });
+  });
+  syncGo();
+}
+
+function load(slot, file) {
+  if (!/^image\/(png|jpeg)$/.test(file.type)) return showError("Please use a JPEG or PNG photo.");
+  const r = new FileReader();
+  r.onload = () => { clearError(); photos[slot] = r.result; renderSlots(); };
+  r.readAsDataURL(file);
+}
+
+function syncGo() {
+  const need = SLOTS[mode].map((s) => s.id);
+  const ready = need.every((id) => photos[id]);
+  // Only one run at a time — two in parallel contend for the same Replicate
+  // account and make both slower.
+  $("go").disabled = !ready || anyLive();
+  $("go").textContent = runs[mode].live ? "Generating…" : anyLive() ? "Busy…" : "Generate";
+}
+
+function fmt(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function card(key, forMode) {
+  const el = document.createElement("div");
+  el.className = "res";
+  // Namespaced by mode so the two grids can coexist.
+  el.id = "res-" + forMode + "-" + key;
+  el.innerHTML =
+    '<div class="top"><span class="name">' + key.replace(/_/g, " ") + '</span>' +
+    '<span class="state">queued</span></div>' +
+    '<div class="bar hidden"><i></i></div>' +
+    '<div class="body"><div class="wait">Waiting…</div></div>';
+  return el;
+}
+
+async function run() {
+  clearError();
+  const need = SLOTS[mode].map((s) => s.id);
+  const payload = { mode, photos: need.map((id) => photos[id]) };
+
+  const runMode = mode; // capture: the user may switch tabs while this runs
+  const st = runs[runMode];
+  st.live = true;
+  st.rendered = new Set();
+  syncGo();
+  const grid = gridFor(runMode);
+  grid.innerHTML = "";
+
+  const runStarted = Date.now();
+  // Full detail to the browser console for every step — the UI only shows a
+  // short per-card label, so anyone diagnosing a slow or failed run needs
+  // this instead of guessing from what's on screen.
+  const log = (...args) => console.log("[local +" + ((Date.now() - runStarted) / 1000).toFixed(1) + "s]", ...args);
+  log("run started", { mode: runMode });
+
+  let res;
+  try {
+    res = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then((r) => r.json());
+  } catch (e) {
+    log("POST /api/run FAILED", e.message || e);
+    st.live = false; syncGo();
+    return showError("Could not reach the server. Is it still running?");
+  }
+  if (res.error) {
+    log("POST /api/run rejected", res.error);
+    st.live = false; syncGo(); return showError(res.error);
+  }
+  log("job created", res.jobId, "pages:", res.keys, "estimate:", res.estimateSeconds + "s");
+
+  for (const k of res.keys) grid.appendChild(card(k, runMode));
+
+  const started = Date.now();
+  const est = res.estimateSeconds;
+  const setEta = (html) => {
+    st.eta = html;
+    if (mode === runMode) $("eta").innerHTML = html;
+  };
+  clearInterval(st.timer);
+  st.timer = setInterval(() => {
+    const gone = Math.round((Date.now() - started) / 1000);
+    const left = Math.max(0, est - gone);
+    setEta("Elapsed <b>" + fmt(gone) + "</b> · about <b>" +
+      (left > 0 ? fmt(left) : "any moment") + "</b> remaining");
+  }, 1000);
+  setEta("Estimated <b>" + fmt(est) + "</b>");
+
+  const finish = (html) => {
+    log("run finished", html.replace(/<[^>]+>/g, ""));
+    clearInterval(st.timer);
+    st.live = false;
+    setEta(html);
+    syncGo();
+  };
+
+  // The server buffers every event and replays it to a new connection, so a
+  // dropped stream can simply be reopened — without this the UI silently froze
+  // on a blip while the run carried on to completion server-side.
+  let src = null;
+  let closed = false;
+  let retries = 0;
+
+  const stop = () => { closed = true; if (src) src.close(); };
+
+  const handle = (e) => {
+    log("SSE event", e);
+    const el = document.getElementById("res-" + runMode + "-" + e.key);
+
+    if (e.type === "scene-start" && el) {
+      el.querySelector(".state").textContent = "starting…";
+      el.querySelector(".bar").classList.remove("hidden");
+    }
+    if (e.type === "stage" && el) {
+      el.querySelector(".state").textContent = STAGE_LABEL[e.stage] || e.stage;
+    }
+    // Replayed events repeat after a reconnect — render each scene only once.
+    if (e.type === "scene-done" && el && !st.rendered.has(e.key)) {
+      st.rendered.add(e.key);
+      el.querySelector(".bar").classList.add("hidden");
+      const badge = el.querySelector(".state");
+      badge.textContent = "done in " + fmt(e.seconds);
+      badge.className = "state ok";
+      el.querySelector(".body").innerHTML = '<img src="' + e.image + '" alt="">';
+      el.querySelector(".body img").addEventListener("click", () => {
+        $("lightboxImg").src = e.image;
+        $("lightbox").showModal();
+      });
+      const a = document.createElement("a");
+      a.className = "dl"; a.href = e.image; a.download = e.key + ".png";
+      a.textContent = "Download full size";
+      el.appendChild(a);
+    }
+    // One page failed but the others keep going — show the reason on that card
+    // instead of blanking it. textContent, not innerHTML, so the message can't inject.
+    if (e.type === "scene-error" && el && !st.rendered.has(e.key)) {
+      st.rendered.add(e.key);
+      el.querySelector(".bar").classList.add("hidden");
+      const badge = el.querySelector(".state");
+      badge.textContent = "failed in " + fmt(e.seconds || 0);
+      badge.className = "state bad";
+      const body = el.querySelector(".body");
+      body.innerHTML = "";
+      const div = document.createElement("div");
+      div.className = "wait";
+      div.textContent = e.message || "This scene failed.";
+      body.appendChild(div);
+    }
+    if (e.type === "error") {
+      showError(e.message);
+      gridFor(runMode).querySelectorAll(".res .state").forEach((s) => {
+        if (!s.classList.contains("ok")) { s.textContent = "stopped"; s.className = "state bad"; }
+      });
+      gridFor(runMode).querySelectorAll(".bar").forEach((b) => b.classList.add("hidden"));
+      stop();
+      finish("Stopped after <b>" + fmt(Math.round((Date.now() - started) / 1000)) + "</b>");
+    }
+    if (e.type === "done") {
+      stop();
+      finish("Finished in <b>" + fmt(Math.round((Date.now() - started) / 1000)) + "</b>");
+    }
+  };
+
+  const connect = () => {
+    log("SSE connecting", "/api/run/" + res.jobId + "/events");
+    src = new EventSource("/api/run/" + res.jobId + "/events");
+    src.onopen = () => log("SSE connection opened");
+    src.onmessage = (m) => { retries = 0; handle(JSON.parse(m.data)); };
+    src.onerror = () => {
+      log("SSE connection error/closed", { readyState: src && src.readyState, retries });
+      if (src) src.close();
+      if (closed) return;
+      // A finished job's stream is closed by the server, which also lands here.
+      // Retry a few times; the replay tells us if it actually completed.
+      if (retries >= 6) {
+        log("giving up after 6 reconnect attempts");
+        finish("Connection lost — the run may still be finishing. Check the terminal.");
+        return;
+      }
+      retries += 1;
+      setTimeout(connect, Math.min(1000 * retries, 5000));
+    };
+  };
+  connect();
+}
+
+document.querySelectorAll(".tab").forEach((t) => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", "false"));
+    t.setAttribute("aria-selected", "true");
+    mode = t.dataset.mode;
+    $("modeTitle").textContent = mode === "single" ? "Single character" : "Two characters";
+    $("modeSub").textContent = mode === "single"
+      ? "One photo produces both scenes. Any child — nothing is hard-coded to a particular face."
+      : "Two photos, one page. Each drawn character is detected and personalized independently, left to right.";
+    // Show this mode's grid, keep the other one intact — a run in flight (or a
+    // finished one) must survive the user glancing at the other tab.
+    gridFor("single").classList.toggle("hidden", mode !== "single");
+    gridFor("multi").classList.toggle("hidden", mode !== "multi");
+    $("eta").innerHTML = runs[mode].eta || "";
+    clearError();
+    renderSlots();
+  });
+});
+
+$("go").addEventListener("click", run);
+$("lightbox").addEventListener("click", () => $("lightbox").close());
+renderSlots();
+</script>
+</body>
+</html>

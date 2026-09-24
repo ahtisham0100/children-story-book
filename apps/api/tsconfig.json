@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true
+  },
+  // `demo` and `homepage` are included deliberately. `demo` used to be left out,
+  // and a demo script rotted undetected — it imported two symbols that no longer
+  // existed and would have crashed on first run, but nothing ever typechecked it.
+  // Everything that imports from src now gets checked against src.
+  //
+  // noEmit because nothing compiles this: dev, start, the CLI and the homepage
+  // server all run straight off tsx.
+  "include": ["src", "demo", "homepage", "homepage_local", "test", "scripts"],
+  // Generated run output, gitignored and overwritten in place. Any scratch
+  // script that lands there is not part of the codebase.
+  "exclude": ["demo/output"]
+}

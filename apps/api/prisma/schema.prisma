@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id         String      @id @default(uuid())
+  locale     String      @default("fr")
+  storyId    String
+  status     String      @default("created") // created | uploaded | processing | done | failed
+  createdAt  DateTime    @default(now())
+  previewKey String? // final composited page — one per session, all characters combined
+  // Sliding expiry for GDPR deletion Pathway 1 (raw uploads deleted 24h after
+  // expiry). Set to now + SESSION_TTL_HOURS at creation, and pushed forward on
+  // activity (upload-confirm, render-full), which also bumps lastActivityAt.
+  // See src/sessionExpiry.ts.
+  //
+  // A session referenced by ANY OrderItem (OrderItem.sessionId, which has no
+  // foreign key, so check with a query) is NEVER "expired" for deletion,
+  // whatever expiresAt says. A bought book's photos are governed by the order
+  // pathways instead (src/gdpr/schedule.ts).
+  expiresAt      DateTime
+  lastActivityAt DateTime    @default(now())
+  // GDPR deletion markers (src/gdpr/deleteSessionAssets.ts). Set only AFTER
+  // the R2 objects are confirmed gone, so an unset marker means "retry".
+  // Once either is set, upload/render routes refuse the session (410): a new
+  // upload after deletion would never be swept again.
+  rawDeletedAt       DateTime? // raw uploads deleted
+  processedDeletedAt DateTime? // rendered pages, preview and print PDFs deleted
+  characters Character[]
+
+  @@index([expiresAt])
+}
+
+model Character {
+  id          String  @id @default(uuid())
+  sessionId   String
+  session     Session @relation(fields: [sessionId], references: [id])
+  slot        String // matches a face region in the session's template, e.g. "child_1"
+  childName   String
+  rawKey      String? // R2 key, original upload
+  jobId       String? // BullMQ job id for status lookup
+
+  @@unique([sessionId, slot])
+}
+
+// A customer is auto-created (silently) the first time an email checks out —
+// no sign-up wall. passwordHash stays null for accounts that only ever use
+// magic-link login; it is set the first time they activate or reset a password.
+model Customer {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String?
+  // "customer" | "admin" (see CUSTOMER_ROLE in src/auth/guard.ts). A plain
+  // string like the status columns. No API route can write it; admins are
+  // made only with the CLI: npm run make-admin -- <email>
+  role         String   @default("customer")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  orders       Order[]
+  authTokens   AuthToken[]
+  sessions     CustomerSession[]
+}
+
+// One row per single-use, time-limited link we email: account activation,
+// passwordless magic-link login, or password reset. Only the SHA-256 of the
+// token is stored — the raw token lives only in the emailed URL — so a database
+// leak never yields a usable link. consumedAt makes every token strictly
+// single-use.
+model AuthToken {
+  id         String    @id @default(uuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  purpose    String // "activation" | "magic_link" | "password_reset"
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+// A logged-in browser session. The cookie carries a random secret; only its
+// SHA-256 is stored here, validated on every authenticated request. Deleting
+// the row (logout, or expiry) invalidates the cookie immediately.
+model CustomerSession {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+model Order {
+  id                    String   @id @default(uuid())
+  // Nullable: pre-auth orders exist, and the column is backfilled at checkout.
+  customerId            String?
+  customer              Customer? @relation(fields: [customerId], references: [id])
+  email                 String
+  shippingName          String
+  shippingLine1         String
+  shippingLine2         String?
+  shippingCity          String
+  shippingPostalCode    String
+  shippingCountry       String
+  status                String   @default("awaiting_payment")
+  stripePaymentIntentId String?  @unique
+  totalCents            Int
+  currency              String   @default("eur")
+  gdprConsentAt         DateTime
+  gelatoOrderId         String?
+  // Fulfilment idempotency markers (src/fulfillment.ts). A retried fulfilment
+  // job reads these to skip steps that already happened.
+  // gelatoSubmitStartedAt is set BEFORE the Gelato POST. If it's set with no
+  // gelatoOrderId, a previous attempt may have created a print order we never
+  // recorded, so fulfilment stops for manual reconciliation instead of risking
+  // a second print order.
+  gelatoSubmitStartedAt   DateTime?
+  confirmationEmailSentAt DateTime?
+  activationEmailSentAt   DateTime?
+  // First time Gelato reported "delivered" (set once, never moved; see the
+  // Gelato webhook). Anchors GDPR Pathway 2: raw photos deleted 24h after,
+  // processed files 30 days after.
+  deliveredAt             DateTime?
+  // Set when the customer deleted their data (DELETE /api/account/my-data):
+  // email, name and address are blanked, amounts/status/items kept.
+  anonymisedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  items                 OrderItem[]
+  statusEvents          OrderStatusEvent[]
+
+  @@index([customerId])
+  @@index([deliveredAt])
+}
+
+model OrderItem {
+  id             String  @id @default(uuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id])
+  sessionId      String
+  storyId        String
+  bookTitle      String
+  priceCents     Int
+  configSnapshot Json
+  printPageKeys  Json
+  printPdfKey    String?
+
+  // The GDPR sweeper and account deletion look items up by session.
+  @@index([sessionId])
+}
+
+model OrderStatusEvent {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  status    String
+  source    String
+  raw       Json?
+  createdAt DateTime @default(now())
+}
+
+// One row per GDPR deletion event (src/gdpr/). Deliberately NO personal data:
+// no email, name or object keys, only ids and counts. sessionId has no foreign
+// key so the row outlives the session it describes.
+model DeletionAuditLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  trigger   String // auto_p1 | auto_p2_raw | auto_p2_processed | user | admin
+  scope     String // raw | processed | all | account
+  sessionId String?
+  fileCount Int
+  actor     String // customerId, admin customerId, or "system"
+  dryRun    Boolean
+  outcome   String // succeeded | failed
+  error     String?
+
+  @@index([createdAt])
+  @@index([sessionId])
+}

@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Personalized Children's Book</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #fff; --ink: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --accent: #4f46e5; --ok: #16a34a; --bad: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { background: #0f172a; color: #fff; padding: 22px 28px; }
+  header h1 { margin: 0; font-size: 21px; }
+  header p { margin: 5px 0 0; color: #94a3b8; font-size: 14px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 26px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+  .tab { padding: 10px 18px; border: 1px solid var(--line); border-radius: 9px;
+    background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 13px;
+    padding: 22px; margin-bottom: 20px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card .sub { color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
+
+  .slots { display: flex; gap: 16px; flex-wrap: wrap; }
+  /* Capped so a single slot doesn't stretch to a full-width 4:3 slab. */
+  .slot { flex: 0 1 300px; min-width: 210px; max-width: 320px; }
+  .slot label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 7px; }
+  .drop { border: 2px dashed #cbd5e1; border-radius: 11px; background: #fbfcfe;
+    aspect-ratio: 4/3; display: grid; place-items: center; cursor: pointer;
+    overflow: hidden; position: relative; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #f5f4ff; }
+  .drop img { width: 100%; height: 100%; object-fit: cover; }
+  .drop span { color: var(--muted); font-size: 13px; text-align: center; padding: 0 14px; }
+  .drop input { display: none; }
+
+  .actions { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+  button.go { background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 12px 26px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button.go:disabled { background: #c7d2fe; cursor: not-allowed; }
+  .eta { color: var(--muted); font-size: 13.5px; }
+  .eta b { color: var(--ink); }
+  .step { color: var(--accent); font-size: 13.5px; font-weight: 600; }
+
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); }
+  .res { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #fff; }
+  .res .top { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .res .name { font-weight: 700; font-size: 13.5px; text-transform: capitalize; }
+  .res .state { font-size: 12px; color: var(--muted); }
+  .res .state.ok { color: var(--ok); font-weight: 600; }
+  .res .state.bad { color: var(--bad); font-weight: 600; }
+  .res .body { aspect-ratio: 4/3; display: grid; place-items: center; background: #f8fafc; }
+  .res .body img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
+  .res .body .wait { color: var(--muted); font-size: 13px; text-align: center; }
+  .bar { height: 3px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 40%; background: var(--accent);
+    animation: slide 1.25s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .res .dl { display: block; padding: 9px 14px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--accent); text-decoration: none; font-weight: 600; }
+
+  /* Bridges into the branded storefront (apps/web) — deliberately styled in
+     that app's own forest/cream identity, not this tool's indigo, so the
+     handoff reads as "you're leaving the dev harness now." */
+  .cart-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+    background: #3e6a49; color: #faf7f0; padding: 10px 20px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; text-decoration: none; letter-spacing: .01em;
+    box-shadow: 0 6px 16px -8px rgba(46,78,53,.6);
+    transition: transform .15s ease, background-color .15s ease; }
+  .cart-cta:hover { background: #2c4e35; transform: translateY(-1px); }
+
+  .err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 13px 16px; border-radius: 9px; font-size: 14px; margin-bottom: 18px; }
+  dialog { border: 0; border-radius: 12px; padding: 0; max-width: 94vw; max-height: 94vh; }
+  dialog img { display: block; max-width: 94vw; max-height: 94vh; }
+  dialog::backdrop { background: rgba(0,0,0,.72); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Personalized Children's Book</h1>
+  <p>Upload a photo. This runs the real product: a session, uploads to R2, a queued render job, and a worker doing the actual work.</p>
+</header>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-mode="single">Single character — 3 scenes</button>
+    <button class="tab" role="tab" aria-selected="false" data-mode="multi">Two characters — 2 pages</button>
+  </div>
+
+  <div id="err" class="err hidden"></div>
+
+  <div class="card">
+    <h2 id="modeTitle">Single character</h2>
+    <div class="sub" id="modeSub">One photo produces all three scenes. Any child — nothing is hard-coded to a particular face.</div>
+    <div class="slots" id="slots"></div>
+    <div class="actions">
+      <button class="go" id="go" disabled>Generate</button>
+      <div class="step" id="step"></div>
+      <div class="eta" id="eta"></div>
+    </div>
+  </div>
+
+  <!-- One grid per mode, shown/hidden rather than rebuilt: switching tabs used to
+       wipe the results of a run that was still in flight. -->
+  <div class="grid" id="grid-single"></div>
+  <div class="grid hidden" id="grid-multi"></div>
+</main>
+
+<dialog id="lightbox"><img id="lightboxImg" alt="" /></dialog>
+
+<script>
+const STEP_LABEL = {
+  validate: "Checking your photo…",
+  render: "Building your story pages…",
+};
+const SLOTS = {
+  single: [{ id: "a", label: "Photo" }],
+  multi: [
+    { id: "a", label: "Photo 1 — the child" },
+    { id: "b", label: "Photo 2 — the adult" },
+  ],
+};
+// Fixed upload-order convention (see src/pipeline/catalog.ts): child photo
+// always first (child_1), regardless of which side any page draws them on.
+const CHARACTER_NAMES = { a: "Child 1", b: "Grown-up" };
+
+let mode = "single";
+const photos = {}; // slot -> { file, dataUrl }
+let scenes = null; // fetched once from /api/scenes: { apiBase, single: {storyId, pages}, multi: {...} }
+
+// Per-mode run state, so a run survives switching tabs to look at the other one.
+const runs = {
+  single: { es: null, poll: null, timer: null, eta: "", step: "", live: false, rendered: new Set() },
+  multi: { es: null, poll: null, timer: null, eta: "", step: "", live: false, rendered: new Set() },
+};
+const gridFor = (m) => document.getElementById("grid-" + m);
+const anyLive = () => runs.single.live || runs.multi.live;
+
+const $ = (id) => document.getElementById(id);
+const errBox = $("err");
+
+function showError(msg) {
+  errBox.textContent = msg;
+  errBox.classList.remove("hidden");
+}
+function clearError() { errBox.classList.add("hidden"); }
+
+function renderSlots() {
+  const wrap = $("slots");
+  wrap.innerHTML = "";
+  for (const s of SLOTS[mode]) {
+    const div = document.createElement("div");
+    div.className = "slot";
+    div.innerHTML =
+      '<label>' + s.label + '</label>' +
+      '<div class="drop" data-slot="' + s.id + '">' +
+        (photos[s.id] ? '<img src="' + photos[s.id].dataUrl + '" alt="">' : '<span>Click or drop a photo<br>JPEG or PNG</span>') +
+      '<input type="file" accept="image/png,image/jpeg"></div>';
+    wrap.appendChild(div);
+  }
+  wrap.querySelectorAll(".drop").forEach((d) => {
+    const input = d.querySelector("input");
+    d.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => input.files[0] && load(d.dataset.slot, input.files[0]));
+    d.addEventListener("dragover", (e) => { e.preventDefault(); d.classList.add("over"); });
+    d.addEventListener("dragleave", () => d.classList.remove("over"));
+    d.addEventListener("drop", (e) => {
+      e.preventDefault(); d.classList.remove("over");
+      const f = e.dataTransfer.files[0];
+      if (f) load(d.dataset.slot, f);
+    });
+  });
+  syncGo();
+}
+
+function load(slot, file) {
+  if (!/^image\/(png|jpeg)$/.test(file.type)) return showError("Please use a JPEG or PNG photo.");
+  const r = new FileReader();
+  r.onload = () => { clearError(); photos[slot] = { file, dataUrl: r.result }; renderSlots(); };
+  r.readAsDataURL(file);
+}
+
+function syncGo() {
+  const need = SLOTS[mode].map((s) => s.id);
+  const ready = need.every((id) => photos[id]);
+  // Only one run at a time — two in parallel contend for the same Replicate
+  // account and make both slower.
+  $("go").disabled = !ready || anyLive();
+  $("go").textContent = runs[mode].live ? "Generating…" : anyLive() ? "Busy…" : "Generate";
+}
+
+function fmt(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function card(key, forMode) {
+  const el = document.createElement("div");
+  el.className = "res";
+  // Namespaced by mode so the two grids can coexist.
+  el.id = "res-" + forMode + "-" + key;
+  el.innerHTML =
+    '<div class="top"><span class="name">' + key.replace(/_/g, " ") + '</span>' +
+    '<span class="state">queued</span></div>' +
+    '<div class="bar"><i></i></div>' +
+    '<div class="body"><div class="wait">Waiting…</div></div>';
+  return el;
+}
+
+// Same wave-based estimate the old in-process server used to compute:
+// pages run PAGE_CONCURRENCY-wide, so wall time is roughly the slowest few
+// waves, not the sum of every page.
+const CONCURRENCY = 3;
+function estimateFor(pages) {
+  const times = pages.map((p) => p.estimate).sort((a, b) => b - a);
+  const waves = Math.ceil(times.length / CONCURRENCY);
+  return Math.round(times.slice(0, waves).reduce((a, b) => a + b, 0) * 1.1);
+}
+
+async function ensureScenes() {
+  if (scenes) return scenes;
+  scenes = await fetch("/api/scenes").then((r) => r.json());
+  return scenes;
+}
+
+async function validateAll(need) {
+  for (const id of need) {
+    const res = await fetch("/api/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photo: photos[id].dataUrl }),
+    }).then((r) => r.json());
+    if (res.error) throw new Error(res.error);
+  }
+}
+
+async function createSession(apiBase, storyId, need) {
+  const characters = need.map((id) => ({ slot: id === "a" ? "child_1" : "child_2", childName: CHARACTER_NAMES[id] }));
+  const res = await fetch(apiBase + "/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ storyId, characters }),
+  });
+  if (!res.ok) throw new Error("Could not create a session (" + res.status + ").");
+  return res.json();
+}
+
+async function uploadCharacter(apiBase, sessionId, characterId, slotId) {
+  const { file } = photos[slotId];
+  const contentType = file.type;
+  const { uploadUrl, objectKey } = await fetch(
+    apiBase + "/api/sessions/" + sessionId + "/characters/" + characterId + "/upload-url",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentType }) },
+  ).then((r) => r.json());
+
+  const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: file });
+  if (!put.ok) throw new Error("Photo upload to storage failed (" + put.status + ").");
+
+  // mode:"full" only takes effect on the call that completes the LAST
+  // character's upload (that's the one which actually triggers enqueueing),
+  // but it's harmless to send every time. Requesting "full" up front means
+  // one job renders every page concurrently, instead of the default
+  // preview-then-render-full sequence, which is two separate BullMQ jobs run
+  // one after another (worker concurrency defaults to 1) — that took roughly
+  // twice as long for no benefit here, since this UI always shows every page.
+  await fetch(
+    apiBase + "/api/sessions/" + sessionId + "/characters/" + characterId + "/upload-confirm",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objectKey, mode: "full" }) },
+  );
+}
+
+async function run() {
+  clearError();
+  const need = SLOTS[mode].map((s) => s.id);
+
+  const runMode = mode; // capture: the user may switch tabs while this runs
+  const st = runs[runMode];
+  st.live = true;
+  st.rendered = new Set();
+  syncGo();
+  const grid = gridFor(runMode);
+  grid.innerHTML = "";
+
+  let sc;
+  try {
+    sc = await ensureScenes();
+  } catch {
+    st.live = false; syncGo();
+    return showError("Could not reach the homepage server. Is it still running?");
+  }
+  const apiBase = sc.apiBase;
+  const modeInfo = sc[runMode];
+  const keys = modeInfo.pages.map((p) => p.key);
+  for (const k of keys) grid.appendChild(card(k, runMode));
+
+  const started = Date.now();
+  // Full detail to the browser console for every step, not just the short
+  // label shown in the UI — the UI is deliberately terse (one line per
+  // card), so anyone diagnosing a slow or stuck render needs this instead of
+  // guessing from what's on screen.
+  const log = (...args) => console.log("[render +" + ((Date.now() - started) / 1000).toFixed(1) + "s]", ...args);
+  log("run started", { mode: runMode, pages: keys, apiBase: sc.apiBase });
+  const est = estimateFor(modeInfo.pages);
+  const setEta = (html) => {
+    st.eta = html;
+    if (mode === runMode) $("eta").innerHTML = html;
+  };
+  const setStep = (text) => {
+    st.step = text;
+    if (mode === runMode) $("step").textContent = text;
+  };
+  clearInterval(st.timer);
+  st.timer = setInterval(() => {
+    const gone = Math.round((Date.now() - started) / 1000);
+    const left = Math.max(0, est - gone);
+    setEta("Elapsed <b>" + fmt(gone) + "</b> · about <b>" +
+      (left > 0 ? fmt(left) : "any moment") + "</b> remaining");
+  }, 1000);
+  setEta("Estimated <b>" + fmt(est) + "</b>");
+  setStep("");
+
+  const stop = () => {
+    clearInterval(st.timer);
+    clearInterval(st.poll);
+    if (st.es) st.es.close();
+    st.es = null;
+    st.poll = null;
+  };
+  const finish = (html) => {
+    log("run finished", html.replace(/<[^>]+>/g, ""));
+    stop();
+    st.live = false;
+    setEta(html);
+    setStep("");
+    syncGo();
+  };
+  const markRemainingFailed = (message) => {
+    for (const k of keys) {
+      if (st.rendered.has(k)) continue;
+      st.rendered.add(k);
+      const el = document.getElementById("res-" + runMode + "-" + k);
+      if (!el) continue;
+      el.querySelector(".bar").classList.add("hidden");
+      const badge = el.querySelector(".state");
+      badge.textContent = "stopped";
+      badge.className = "state bad";
+      const body = el.querySelector(".body");
+      body.innerHTML = "";
+      const div = document.createElement("div");
+      div.className = "wait";
+      div.textContent = message;
+      body.appendChild(div);
+    }
+  };
+
+  // Polling /pages is the SOLE source of truth for "are we actually done" —
+  // deliberately NOT the SSE "done" event. Uploading the last photo
+  // auto-enqueues a "preview" job (renders just the flagged preview page),
+  // and this code ALSO calls render-full right after (renders every page,
+  // worker skips whatever the preview job already finished). That's two
+  // BullMQ jobs for one session, but the production status route was built
+  // for one job per session: it force-closes the SSE stream after the FIRST
+  // done/error it sees, which is the small preview job — treating that as
+  // "finished" left every other page stuck showing "queued" forever with the
+  // real render-full job still working server-side. Checking "every expected
+  // page id is ready" instead of trusting a single SSE event is what actually
+  // reflects completion here.
+  const pollPages = async (sessionId) => {
+    let res;
+    try {
+      res = await fetch(apiBase + "/api/sessions/" + sessionId + "/pages").then((r) => r.json());
+    } catch (e) {
+      log("poll /pages FAILED", e.message || e);
+      return;
+    }
+    log(
+      "poll /pages",
+      (res.pages || []).map((p) => p.id + ":" + (p.ready ? "ready" : "not-ready")).join(", "),
+    );
+    for (const p of res.pages || []) {
+      if (!p.ready || st.rendered.has(p.id)) continue;
+      const el = document.getElementById("res-" + runMode + "-" + p.id);
+      if (!el) continue;
+      log("page marked done (via /pages poll)", p.id);
+      st.rendered.add(p.id);
+      el.querySelector(".bar").classList.add("hidden");
+      const badge = el.querySelector(".state");
+      badge.textContent = "done";
+      badge.className = "state ok";
+      el.querySelector(".body").innerHTML = '<img src="' + p.url + '" alt="">';
+      el.querySelector(".body img").addEventListener("click", () => {
+        $("lightboxImg").src = p.url;
+        $("lightbox").showModal();
+      });
+      const a = document.createElement("a");
+      a.className = "dl"; a.href = p.url; a.download = p.id + ".png";
+      a.textContent = "Download full size";
+      el.appendChild(a);
+    }
+    if (keys.every((k) => st.rendered.has(k))) {
+      // Bridge into the standalone cart/checkout app (apps/web). Hardcoded
+      // localhost default matches how this file already hardcodes its own
+      // local-dev assumptions elsewhere — point this at the real deployed
+      // web app's origin once one exists.
+      const webAppUrl = window.WEB_APP_URL || "http://localhost:3000";
+      const cartUrl = webAppUrl + "/cart?add=" + encodeURIComponent(sessionId);
+      finish(
+        "Finished in <b>" + fmt(Math.round((Date.now() - started) / 1000)) + "</b><br>" +
+          '<a class="cart-cta" href="' + cartUrl + '">Add this book to cart →</a>',
+      );
+    }
+  };
+
+  // Safety net: if something goes wrong server-side with no SSE error either
+  // (e.g. the worker process dies), don't poll forever — give up generously
+  // past the estimate and show whatever didn't make it as failed.
+  const giveUpAt = started + Math.max(est * 3, 300) * 1000;
+
+  try {
+    log("validating photo(s) locally");
+    await validateAll(need);
+    log("validated ok");
+
+    const session = await createSession(apiBase, modeInfo.storyId, need);
+    log("session created", session.sessionId);
+    for (const c of session.characters) {
+      const slotId = c.slot === "child_1" ? "a" : "b";
+      await uploadCharacter(apiBase, session.sessionId, c.characterId, slotId);
+      log("uploaded + confirmed character", c.characterId, "slot", c.slot);
+    }
+    // uploadCharacter already requested mode:"full" on upload-confirm, so the
+    // one auto-enqueued job renders every page — no separate render-full call.
+    log("all characters uploaded — render job should now be enqueued server-side");
+
+    st.poll = setInterval(() => {
+      if (Date.now() > giveUpAt) {
+        log("GIVE-UP timeout reached (" + Math.round((giveUpAt - started) / 1000) + "s budget) — marking remaining pages failed");
+        markRemainingFailed("Timed out waiting for this page.");
+        finish("Stopped after <b>" + fmt(Math.round((Date.now() - started) / 1000)) + "</b>");
+        return;
+      }
+      pollPages(session.sessionId);
+    }, 3000);
+    pollPages(session.sessionId);
+
+    st.es = new EventSource(apiBase + "/api/sessions/" + session.sessionId + "/status");
+    st.es.addEventListener("open", () => log("SSE connection opened"));
+    st.es.addEventListener("status", (m) => {
+      const e = JSON.parse(m.data);
+      log("SSE status", e);
+      if (e.page) {
+        // Page-specific progress (which page started, which pipeline stage
+        // it's on) — route it onto that page's own card instead of the
+        // single line above the grid. Skip if the card already shows "done":
+        // a late-arriving stage event for an already-finished page (SSE and
+        // the /pages poll aren't ordered against each other) shouldn't
+        // un-finish it.
+        if (st.rendered.has(e.page)) return;
+        const el = document.getElementById("res-" + runMode + "-" + e.page);
+        if (el) el.querySelector(".state").textContent = e.message;
+      } else {
+        setStep(STEP_LABEL[e.step] || e.step);
+      }
+    });
+    // Deliberately NOT finishing the run here — see the pollPages comment
+    // above. This event just means SOME job for this session finished; an
+    // extra immediate poll makes that page's result appear a little sooner.
+    st.es.addEventListener("done", (m) => {
+      log("SSE done", JSON.parse(m.data));
+      pollPages(session.sessionId);
+    });
+    st.es.addEventListener("error", (m) => {
+      const e = JSON.parse(m.data);
+      log("SSE error event", e);
+      showError(e.message || "The render failed.");
+      // A job-level error doesn't necessarily doom every page (the other
+      // enqueued job may still be working), so keep polling rather than
+      // stopping outright — the give-up timeout above is the actual backstop.
+    });
+    st.es.onerror = () => {
+      // EventSource auto-retries on a network blip by itself; polling
+      // independently already covers completion, so nothing to do here.
+      log("SSE connection error/closed (EventSource will auto-retry)", { readyState: st.es && st.es.readyState });
+    };
+  } catch (e) {
+    log("run FAILED", e.message || e);
+    stop();
+    st.live = false;
+    // A thrown error here (session creation, upload, or the direct R2 PUT —
+    // e.g. an R2 bucket CORS rejection) used to leave every card silently
+    // stuck on "queued" forever with only a small banner at the top as any
+    // sign something failed. Mark the cards too, so it's unmissable.
+    markRemainingFailed(e.message || "This scene failed.");
+    setStep("");
+    syncGo();
+    return showError(e.message || "Something went wrong.");
+  }
+}
+
+document.querySelectorAll(".tab").forEach((t) => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", "false"));
+    t.setAttribute("aria-selected", "true");
+    mode = t.dataset.mode;
+    $("modeTitle").textContent = mode === "single" ? "Single character" : "Two characters";
+    $("modeSub").textContent = mode === "single"
+      ? "One photo produces all three scenes. Any child — nothing is hard-coded to a particular face."
+      : "Two photos, one page. Each drawn character is detected and personalized independently, left to right.";
+    // Show this mode's grid, keep the other one intact — a run in flight (or a
+    // finished one) must survive the user glancing at the other tab.
+    gridFor("single").classList.toggle("hidden", mode !== "single");
+    gridFor("multi").classList.toggle("hidden", mode !== "multi");
+    $("eta").innerHTML = runs[mode].eta || "";
+    $("step").textContent = runs[mode].step || "";
+    clearError();
+    renderSlots();
+  });
+});
+
+$("go").addEventListener("click", run);
+$("lightbox").addEventListener("click", () => $("lightbox").close());
+renderSlots();
+ensureScenes().catch(() => showError("Could not reach the homepage server. Is it still running?"));
+</script>
+</body>
+</html>

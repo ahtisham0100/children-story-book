@@ -1,0 +1,16 @@
+# Local face-swap service. Python 3.10-3.12.
+#
+# onnxruntime (CPU) is deliberate: this dev machine has no CUDA device. On a
+# CUDA box swap this line for onnxruntime-gpu and put "CUDAExecutionProvider"
+# first in app.py — that is the only change needed.
+onnxruntime>=1.17,<2
+
+# 1.x ships a pure-python `py3-none-any` wheel. Do NOT drop to 0.7.3: that is
+# sdist-only and compiles Cython extensions, which on Windows means installing
+# MSVC Build Tools first. Same API for our purposes.
+insightface>=1.0.1,<2
+opencv-python-headless>=4.9,<5
+numpy>=1.24,<3
+fastapi>=0.110,<1
+uvicorn[standard]>=0.27,<1
+pydantic>=2.6,<3

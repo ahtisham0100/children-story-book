@@ -1,0 +1,24 @@
+{
+  "name": "childrens-book-platform",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Photo-to-illustration children's book platform — personalization pipeline, cart/checkout, print dispatch.",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "install:all": "npm install --prefix apps/api && npm install --prefix apps/web",
+    "dev": "concurrently -n API,WEB,HOMEPAGE -c blue,green,magenta \"npm run dev --prefix apps/api\" \"npm run dev --prefix apps/web\" \"npm run homepage --prefix apps/api\"",
+    "dev:core": "concurrently -n API,WEB -c blue,green \"npm run dev --prefix apps/api\" \"npm run dev --prefix apps/web\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AffanAhmed7/childrens-book-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AffanAhmed7/childrens-book-platform/issues"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

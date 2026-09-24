@@ -1,0 +1,38 @@
+Put the face-swap weights file in THIS directory:
+
+    services/faceswap/models/inswapper_128.onnx
+
+That single file is the only thing standing between "the service boots but
+refuses to swap" and "the service works". Everything else is installed and the
+detection model (buffalo_l) is fetched automatically.
+
+WHY IT ISN'T HERE ALREADY
+-------------------------
+Two separate reasons, don't conflate them:
+
+1. Provenance. InsightFace withdrew inswapper_128 from official distribution.
+   The copies that circulate are third-party re-uploads with no official
+   checksum to verify against. It is a binary that onnxruntime loads and
+   EXECUTES, so it should come from a source you actually trust, placed by a
+   human who chose it — not auto-fetched from a mirror.
+
+2. Licensing. inswapper is non-commercial / research licensed. Obtaining and
+   running it to build, test and benchmark is within that. SELLING a product
+   that runs it is not, and needs InsightFace's commercial licence. This is the
+   same licence the hosted Replicate model needs too — self-hosting doesn't
+   change it. See "Known state" in apps/api/README.md.
+
+AFTER YOU PLACE THE FILE
+------------------------
+Sanity-check it before wiring anything up:
+
+    cd services/faceswap
+    .venv/Scripts/python.exe preflight.py
+
+That confirms the file loads as a real inswapper model. Then:
+
+    .venv/Scripts/python.exe app.py          # boots the service on :5175
+    # in apps/api/.env:  SWAP_BACKEND=local
+    cd ../../apps/api && npm run bench:swap -- ../../assets/test-photos/<photo>.jpg
+
+You can delete this .txt once the weights are in place.
